@@ -1,0 +1,7 @@
+F:\Delme\CleanBCD>cscript StdRegWrapperClassTest.wsf
+Microsoft (R) Windows Script Host Version 5.812
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Execution continued  18.778 seconds
+
+F:\Delme\CleanBCD>

@@ -1,0 +1,34 @@
+
+C:\Windows\system32>cmd.exe /K "F:&&cd delme\CleanBCD&&mountvhds.cmd"
+
+F:\Delme\CleanBCD>diskpart.exe /s f:\Delme\CleanBCD\MountVHDs.input.txt
+
+Microsoft DiskPart version 6.3.9600
+
+Copyright (C) 1999-2013 Microsoft Corporation.
+On computer: R500D
+
+DiskPart successfully selected the virtual disk file.
+
+  100 percent completed
+
+DiskPart successfully attached the virtual disk file.
+
+DiskPart successfully selected the virtual disk file.
+
+  100 percent completed
+
+DiskPart successfully attached the virtual disk file.
+
+Leaving DiskPart...
+
+F:\Delme\CleanBCD>PowerShell Mount-DiskImage -ImagePath \"f:\!Inst\@Soft\RecoreryTools\PartitionDoctorEaseus\Ptd.iso\"
+
+F:\Delme\CleanBCD>PowerShell Mount-DiskImage -ImagePath \"f:\Delme\Windows10_InsiderPreview_x64_EN-US_10162.iso\"
+F:\Delme\CleanBCD>cscript StdRegWrapperClassTest.wsf
+Microsoft (R) Windows Script Host Version 5.8
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+Execution continued  14.390 seconds
+
+F:\Delme\CleanBCD>
