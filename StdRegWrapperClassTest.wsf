@@ -367,7 +367,7 @@ version 02 continued from 02.00 till 02.154 at June 18 2015
          WScript.Quit();//**********************QUIT FROM StdReg*********************************
       }
       
-      if ( typeof( regPath ) != "string" || regPath.indexOf( "\\" ) == - 1 )
+      if ( typeof( regPath ) != "string" )//|| regPath.indexOf( "\\" ) == - 1 )
       {
          WScript.StdErr.WriteLine( "*** Method " + RegMethod + " incorrect regPath=" + regPath );
          WScript.Quit();//**********************QUIT FROM StdReg*********************************
@@ -935,6 +935,7 @@ version 02 continued from 02.00 till 02.154 at June 18 2015
          case REG_EXPAND_SZ:{ val = this.RegGetExpandedStringValue( root, regPath, name ); break; }
          case REG_MULTI_SZ: { val = this.RegGetMultiStringValue(    root, regPath, name ); break; }
          case REG_BINARY:   { val = this.RegGetBinaryValue(         root, regPath, name ); break; }
+         case REG_NONE:     { val = this.RegGetStringValue(         root, regPath, name ); break; }
          case REG_DWORD:    { val = this.RegGetDWORDValue(          root, regPath, name ); break; }
          case REG_QWORD:    { val = this.RegGetQWORDValue(          root, regPath, name ); break; }
       }
@@ -1461,18 +1462,29 @@ regObj.SetUseCallCounts( 1 );          // enable counting of the calls
 var OutLog = MyName + "-" + CurrentVersionObject.CurrentBuild + "-StdOut.txt";
 var ErrLog = MyName + "-" + CurrentVersionObject.CurrentBuild + "-StdErr.txt";
 
-Out.StdErr = fso.CreateTextFile( OutLog, true, 0 );// overwrite, ascii
-Out.StdOut = fso.CreateTextFile( ErrLog, true, 0 );// overwrite, ascii
+Out.StdErr = fso.CreateTextFile( ErrLog, true, 0 );// overwrite, ascii
+Out.StdOut = fso.CreateTextFile( OutLog, true, 0 );// overwrite, ascii
 
 regObj.Out.StdErr = Out.StdErr;  // redefine Output for the StdRegWrapperClass
 regObj.Out.StdOut = Out.StdOut;  // redefine Output for the StdRegWrapperClass
 
 Out.StdOut.WriteLine( "\n" );
-Out.StdOut.WriteLine( "Build "+CurrentVersionObject.CurrentBuild+
-            ", StdRegWrapperClass version " + rver );
+Out.StdOut.WriteLine( "Build "+CurrentVersionObject.CurrentBuild +
+                      ", StdRegWrapperClass version " + rver );
 Out.StdOut.WriteLine( "\n" );
 
-TestcaseForCreatetSetMethods(); // Execute Test Case
+var Run_TestcaseForCreatetSetMethods = false;
+var Run_DeepDive                     = true;
+
+if ( Run_TestcaseForCreatetSetMethods )
+{
+   TestcaseForCreatetSetMethods(); // Execute Test Case
+}
+
+if ( Run_DeepDive )
+{
+   RunDeepDive( 1 ); // Execute Test Case
+}
 
 var Counts = regObj.GetCallCounts();
 Out.StdOut.WriteLine( "\n" );
@@ -1482,6 +1494,7 @@ for ( var p in Counts )         //  type counts table
    Out.StdOut.WriteLine( "StdRegWrapperClass method " + p.left( "RegSetExpandedStringValue".length ) +
    " was used " + Counts[ p ].toString().right( 4, " " ) + " times" );
 }
+Out.StdOut.WriteLine( "\n" );
 Out.StdOut.WriteLine( "\n" );
 
 var finished = new Date();
@@ -1500,8 +1513,10 @@ if ( duration > second )
    cdur = "Execution continued  "+durss + "." + durmilli + " seconds";
    if ( durss > 60 )
    {
-      durmm = duration / minute;
-      durss = durss - 60 * durmm;
+      durmm = ( ( minute - 1 + duration ) / minute ).toFixed();
+      durss =   ( minute - 1 + duration ) % minute;
+      durmilli = durss % second;
+      durss = ( ( second - 1 + durss ) / second ).toFixed();
       cdur  = "Execution continued " + durmm + " minutes " + durss + "." + durmilli + " seconds";
    }  
 }
@@ -1524,6 +1539,193 @@ function PutMsg( rc, func, path, key )
    if ( arguments.length == 4 ) msg += " " + key;
    Out.StdOut.WriteLine( msg );
    return true;
+}
+//
+// Run DeepDive test-case
+//
+function RunDeepDive( flag )
+{
+   flag = ( arguments.length == 0 ) ? false : true;
+
+   var HKLM = 0x80000002;// HKEY_LOCAL_MACHINE
+   var HKU  = 0x80000003;// HKEY_USERS
+   var DiveSpots = [ 
+      { "root": HKLM, "path": "HARDWARE"                            }, 
+      { "root": HKLM, "path": "SYSTEM\\CurrentControlSet\\Services" },
+      { "root": HKLM, "path": "SYSTEM\\CurrentControlSet\\Enum"     },
+      { "root": HKLM, "path": "SYSTEM\\CurrentControlSet\\Control"  },
+      { "root": HKLM, "path": "SYSTEM\\CurrentControlSet\\Setup"    },
+      { "root": HKLM, "path": "SYSTEM\\CurrentControlSet\\Software" },
+      { "root": HKU,  "path": CurrentUserSID                        },
+      { "root": HKU,  "path": CurrentUserSID + "_Classes"           }       
+   ];
+
+   var ret, RegObjects, obj, path, croot;
+   var longest = "", MaxDepth = 1, deepest = "", msg;
+   var MaxBinLength = 1;
+   var MaxBinLengthName = "";
+   var MaxBinLengthPath = "";
+
+   for ( var p = 0; p < DiveSpots.length; p++ )
+   {
+      root = DiveSpots[ p ].root;
+      path = DiveSpots[ p ].path;
+      ret  = DeepDive( root, path, [] );
+      RegObjects = ret.objects;
+      croot = ( root == HKLM ) ? "HKLM" : "HCU";
+      for ( var i = 0; i < RegObjects.length; i++ )
+      {
+         obj = RegObjects[ i ];
+         msg = "";
+         if ( obj.path.length > longest.length 
+         ||   obj.path.split( "\\" ).length > MaxDepth )
+         {
+            if ( obj.path.length > longest.length )
+            { 
+               longest = obj.path;
+            }
+            else
+            { 
+               MaxDepth = obj.path.split( "\\" ).length;
+               deepest  = obj.path;
+               Out.StdOut.WriteLine( "MaxDepth" + obj.path.split( "\\" ).length );
+            }
+         }
+         if ( obj.HasBinary )
+         {
+            if ( obj.MaxBinLength > MaxBinLength )
+            {
+               MaxBinLength = obj.MaxBinLength;
+               MaxBinLengthName = obj.MaxBinLengthName;
+               MaxBinLengthPath = obj.path;
+            }
+         }
+         if ( flag )
+         {
+            Out.StdOut.WriteLine( croot + "\\"+obj.path );
+            if ( obj.valuenames == "" )
+            {
+               Out.StdOut.WriteLine( "ValueNames=" );
+               continue;
+            } 
+            Out.StdOut.WriteLine( "ValueNames="+obj.valuenames );
+            Out.StdOut.WriteLine( "ValueTypes="+obj.valuetypes ); 
+            if ( obj.HasBinary )
+            {
+               Out.StdOut.WriteLine( "BinaryValueNames="+obj.binvals );
+            }
+            if ( obj.dates != "" )
+            {
+               Out.StdOut.WriteLine( "Dates="+obj.dates ); 
+            }
+            if ( obj.HasSubKeys )
+            {
+               Out.StdOut.WriteLine( "Subkeys="+obj.subkeys ); 
+            } 
+            Out.StdOut.WriteLine( "\n" );      
+         }
+         else
+         {
+            Out.StdOut.WriteLine( croot + "\\"+obj.path );
+            Out.StdOut.WriteLine( "valuenames="+obj.valuenames.split(",").length +
+            " valuetypes="+obj.valuetypes.split(",").length + 
+            " subkeys="+obj.subkeys.split(",").length + " " + obj.HasBinary );
+            Out.StdOut.WriteLine( "\n" );
+         }
+      } // end-of-objects loop
+      
+      Out.StdOut.WriteLine( "\n" );
+      Out.StdOut.WriteLine( MaxBinLengthName + " MaxBinLength = " + MaxBinLength + " at " + MaxBinLengthPath );
+      Out.StdOut.WriteLine( "\n" );
+   } // end-of-DiveSpots loop
+
+   Out.StdOut.WriteLine( "\n" );
+   Out.StdOut.WriteLine( "MaxDepth = " + MaxDepth + " at " + deepest );
+   Out.StdOut.WriteLine( "Longest path = " + longest );
+   Out.StdOut.WriteLine( "\n" );
+   return true;
+}
+function DepthAndPathLengthDependanceTest()
+{
+}
+function DeepDive( root, path, objects )
+{
+   var rc, subkeys, values, ret, obj, qw, qwr;
+   var REG_NONE                       =  0; // No value type
+   var REG_SZ                         =  1; // Unicode nul terminated string
+   var REG_EXPAND_SZ                  =  2; // Unicode nul terminated string
+                                            // (with environment variable references)
+   var REG_BINARY                     =  3; // Free form binary
+   var REG_DWORD                      =  4; // 32-bit number
+   var REG_DWORD_BIG_ENDIAN           =  5; // 32-bit number
+   var REG_LINK                       =  6; // Symbolic Link (unicode)
+   var REG_MULTI_SZ                   =  7; // Multiple Unicode strings
+   var REG_RESOURCE_LIST              =  8; // Resource list in the resource map
+   var REG_FULL_RESOURCE_DESCRIPTOR   =  9; // Resource list in the hardware description
+   var REG_RESOURCE_REQUIREMENTS_LIST = 10; //
+   var REG_QWORD                      = 11; // 64-bit number
+
+   var names = [], types = [], binvals = [], dates = [], ret;
+   var binval;
+   var MaxBinLength = 0;
+   var MaxBinLengthName = "";
+   
+   subkeys = regObj.RegEnumKey( root, path );
+   values  = regObj.RegEnumValues( root, path );
+   
+   for ( var i = 0; i < values.length; i++ )
+   {
+      names[ i ] = values[ i ].name;
+      types[ i ] = values[ i ].type;
+      if ( types[ i ] == REG_BINARY )
+      {
+         binvals[ binvals.length ] = names[ i ];
+         binval = regObj.RegGetBinaryValue( root, path, names[ i ] );
+         if ( binval.length > MaxBinLength )
+         {
+            MaxBinLength = binval.length;
+            MaxBinLengthName = names[ i ];
+         }
+      }
+      if ( types[ i ] == REG_QWORD )
+      {
+         qw  = regObj.RegGetQWORDValue( root, path, names[ i ] );
+         if ( qw > 123000000000000000  // 1990.10.10 06:41:01
+         &&   qw < 130907120609450000 )// 2015.10.30 24:55:21
+         {                                      // 281474976710656
+            Out.StdOut.WriteLine( "Date at " + path + " " + names[ i ] );
+            Out.StdOut.WriteLine( qw + " " + regObj.RegDateToDate( qw ).toString() );
+            dates[ dates.length ] = qw;
+         }
+      }  
+   }
+   
+   obj            = {};
+   obj.path       = path;
+   obj.valuenames = names.join( "," );
+   obj.valuetypes = types.join( "," );
+   obj.subkeys    = subkeys.join( "," );
+   obj.binvals    = binvals.join( "," );
+   obj.dates      = dates.join( "," );
+   obj.HasSubKeys = ( subkeys.length > 0 );
+   obj.HasBinary  = ( binvals.length > 0 );
+   if ( obj.HasBinary )
+   {
+      obj.MaxBinLength = MaxBinLength;
+      obj.MaxBinLengthName = MaxBinLengthName;
+   }
+   objects[ objects.length ] = obj;  
+
+   for ( var i = 0; i < subkeys.length; i++ )
+   {
+      ret     = DeepDive( root, path + "\\" + subkeys[ i ], objects );
+      objects = ret.objects;
+      for ( var j = 0; j < ret.subjeys; j++ )
+      {
+         subkeys[ subkeys.length ] = ret.subkeys[ j ];
+      }
+   }
+   return { "subkeys": subkeys, "objects": objects };
 }
 function DeleteSubpath( root, head, tail )
 {
@@ -1588,6 +1790,11 @@ function CopyKeyAndValues( SourceRoot, SourcePath, TargetRoot, TargetPath, key )
          val  = null;
          switch( type )
          {
+         case REG_NONE:       
+            val = regObj.RegGetStringValue( SourceRoot, SourcePath, name ); 
+            rc  = regObj.RegSetStringValue( TargetRoot, TargetPath, name, "" ); 
+            PutMsg( rc, "RegSetNONEValue", TargetPath, name ); 
+            break;
          case REG_SZ:       
             val = regObj.RegGetStringValue( SourceRoot, SourcePath, name ); 
             rc  = regObj.RegSetStringValue( TargetRoot, TargetPath, name, val ); 
@@ -1681,7 +1888,7 @@ function CopyKeyAndValues( SourceRoot, SourcePath, TargetRoot, TargetPath, key )
                tmp = regObj.RegGetQWORDValue( HKLM, TimestampPath, "InitialTimestamp" );
                if ( tmp != null )
                {
-                  Out.StdOut.WriteLine( "RegDateToDate: " + regObj.RegDateToDate( tmp ).toString() ); 
+                  Out.StdOut.WriteLine( "RegDateToDate: " + regObj( tmp ).toString() ); 
                }
             }
          }         
@@ -1696,6 +1903,7 @@ function CopyKeyAndValues( SourceRoot, SourcePath, TargetRoot, TargetPath, key )
 }
 function CopyTree( SourceRoot, SourcePath, TargetRoot, TargetPath )
 {
+   Out.StdOut.WriteLine( "CopyTree SourcePath: " + SourcePath );
    var rc, subkeys, ret;
    var HKCR = 0x80000000;// HKEY_CLASSES_ROOT
    var HKCU = 0x80000001;// HKEY_CURRENT_USER
@@ -1707,13 +1915,13 @@ function CopyTree( SourceRoot, SourcePath, TargetRoot, TargetPath )
    var sj = SourcePath; 
    var tj = TargetPath;
    var branches = [], retj, DiskIdPath, TimestampPath, tmp;
+
    for ( var i = 0; i < subkeys.length; i++ )
    {
       sj = SourcePath + "\\" + subkeys[ i ];
       tj = TargetPath + "\\" + subkeys[ i ];
       ret = CopyKeyAndValues( SourceRoot, SourcePath, TargetRoot, TargetPath, subkeys[ i ] );
-      Out.StdOut.WriteLine( ret.ErrCode + " for CopyKeyAndValues sj = " + sj +
-      "\n tj = " + tj + ", key = " + subkeys[ i ] );
+      PutMsg( ret.ErrCode, "CopyKeyAndValues", sj, subkeys[ i ] );
       if ( ret.ErrCode ) continue;
       for ( var j = 0; j < ret.SubKeys.length; j++ )
       {
@@ -1830,6 +2038,7 @@ function TestcaseForCreatetSetMethods()
    Out.StdOut.WriteLine( "RegCreateKey SOFTWARE\\TestStdRegProv" + " RC="+rc );
    var head = "SOFTWARE\\TestStdRegProv";
    var sbranches = [ 
+      "SYSTEM\\DriverDatabase\\DeviceIds\\{36fc9e60-c465-11cf-8056-444553540000}",
       "SYSTEM\\CurrentControlSet\\Control\\hivelist",
       "SYSTEM\\CurrentControlSet\\Control\\SystemInformation",
       "SYSTEM\\CurrentControlSet\\Control\\PnP\\Pci",
@@ -1844,7 +2053,7 @@ function TestcaseForCreatetSetMethods()
    
    if ( rc == 0 )
    {
-      for ( var i = 0; i < sbranches.length; i++ )
+      for ( var i = 0; i < sbranches.length; i++ )//sbranches.length
       {
          branches = CopyTree( HKLM, sbranches[ i ], HKLM, head );
          Out.StdOut.WriteLine( "CopyTree branches.length = "+branches.length );
